@@ -117,3 +117,17 @@ def predict(payload: CreditInput):
         raise HTTPException(status_code=500, detail=f"Unexpected class label: {pred_class}")
 
     return {"prediction": pred_value}
+
+from fastapi.middleware.cors import CORSMiddleware
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "https://credit-frontend-558345680759.us-west2.run.app",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)

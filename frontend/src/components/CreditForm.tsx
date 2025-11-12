@@ -11,7 +11,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
-import { ChevronRight, ChevronLeft, User, DollarSign, Home, CheckCircle2, XCircle } from "lucide-react";
+import {
+  ChevronRight,
+  ChevronLeft,
+  User,
+  DollarSign,
+  Home,
+  CheckCircle2,
+  XCircle,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type FormData = {
@@ -46,7 +54,9 @@ const CreditForm = () => {
   const [result, setResult] = useState<number | null>(null);
   const [showResult, setShowResult] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [errors, setErrors] = useState<Partial<Record<keyof FormData, boolean>>>({});
+  const [errors, setErrors] = useState<
+    Partial<Record<keyof FormData, boolean>>
+  >({});
 
   const totalSteps = 3;
 
@@ -115,7 +125,7 @@ const CreditForm = () => {
     }
 
     setIsLoading(true);
-    
+
     // Transform frontend data to match backend format
     const backendPayload = {
       Gender: form.Gender,
@@ -128,15 +138,16 @@ const CreditForm = () => {
       LoanAmount: parseFloat(form.LoanAmount) * 1000, // Convert from thousands
       Loan_Amount_Term: parseFloat(form.Loan_Amount_Term),
       Credit_History: form.Credit_History,
-      Property_Area: form.Property_Area === "Semiurban" ? "Semi Urban" : form.Property_Area,
+      Property_Area:
+        form.Property_Area === "Semiurban" ? "Semi Urban" : form.Property_Area,
     };
 
     try {
-      const response = await fetch("http://localhost:8000/predict", {
+      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
+      import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
+      const response = await fetch(`${apiBaseUrl}/predict`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(backendPayload),
       });
 
@@ -190,11 +201,11 @@ const CreditForm = () => {
               </div>
             )}
           </div>
-          
+
           <h2 className="text-3xl font-bold mb-2">
             {result === 1 ? "Low Credit Risk" : "High Credit Risk"}
           </h2>
-          
+
           <p className="text-muted-foreground mb-8">
             {result === 1
               ? "Based on the information provided, the applicant shows a favorable credit profile with good repayment probability."
@@ -205,7 +216,12 @@ const CreditForm = () => {
             <Button onClick={resetForm} className="w-full" size="lg">
               Check Another Application
             </Button>
-            <Button onClick={() => setShowResult(false)} variant="outline" className="w-full" size="lg">
+            <Button
+              onClick={() => setShowResult(false)}
+              variant="outline"
+              className="w-full"
+              size="lg"
+            >
               Review Details
             </Button>
           </div>
@@ -218,30 +234,56 @@ const CreditForm = () => {
     <div className="min-h-screen flex items-center justify-center p-4">
       <Card className="w-full max-w-2xl p-6 md:p-8 shadow-lg">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-foreground mb-2">Credit Risk Assessment</h1>
-          <p className="text-muted-foreground">Complete the form to evaluate credit eligibility</p>
+          <h1 className="text-3xl font-bold text-foreground mb-2">
+            Credit Risk Assessment
+          </h1>
+          <p className="text-muted-foreground">
+            Complete the form to evaluate credit eligibility
+          </p>
         </div>
 
         {/* Progress Bar */}
         <div className="mb-8">
           <div className="flex justify-between mb-3">
-            <span className="text-sm font-medium text-foreground">Step {step} of {totalSteps}</span>
-            <span className="text-sm text-muted-foreground">{Math.round((step / totalSteps) * 100)}% Complete</span>
+            <span className="text-sm font-medium text-foreground">
+              Step {step} of {totalSteps}
+            </span>
+            <span className="text-sm text-muted-foreground">
+              {Math.round((step / totalSteps) * 100)}% Complete
+            </span>
           </div>
           <Progress value={(step / totalSteps) * 100} className="h-2" />
-          
+
           <div className="flex justify-between mt-4">
-            <div className={`flex items-center gap-2 ${step >= 1 ? 'text-primary' : 'text-muted-foreground'}`}>
+            <div
+              className={`flex items-center gap-2 ${
+                step >= 1 ? "text-primary" : "text-muted-foreground"
+              }`}
+            >
               <User className="w-4 h-4" />
-              <span className="text-xs font-medium hidden sm:inline">Personal</span>
+              <span className="text-xs font-medium hidden sm:inline">
+                Personal
+              </span>
             </div>
-            <div className={`flex items-center gap-2 ${step >= 2 ? 'text-primary' : 'text-muted-foreground'}`}>
+            <div
+              className={`flex items-center gap-2 ${
+                step >= 2 ? "text-primary" : "text-muted-foreground"
+              }`}
+            >
               <DollarSign className="w-4 h-4" />
-              <span className="text-xs font-medium hidden sm:inline">Financial</span>
+              <span className="text-xs font-medium hidden sm:inline">
+                Financial
+              </span>
             </div>
-            <div className={`flex items-center gap-2 ${step >= 3 ? 'text-primary' : 'text-muted-foreground'}`}>
+            <div
+              className={`flex items-center gap-2 ${
+                step >= 3 ? "text-primary" : "text-muted-foreground"
+              }`}
+            >
               <Home className="w-4 h-4" />
-              <span className="text-xs font-medium hidden sm:inline">Loan Details</span>
+              <span className="text-xs font-medium hidden sm:inline">
+                Loan Details
+              </span>
             </div>
           </div>
         </div>
@@ -252,8 +294,15 @@ const CreditForm = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
                 <Label htmlFor="Gender">Gender</Label>
-                <Select value={form.Gender} onValueChange={(value) => handleChange("Gender", value)}>
-                  <SelectTrigger className={cn(errors.Gender && "border-destructive border-2")}>
+                <Select
+                  value={form.Gender}
+                  onValueChange={(value) => handleChange("Gender", value)}
+                >
+                  <SelectTrigger
+                    className={cn(
+                      errors.Gender && "border-destructive border-2"
+                    )}
+                  >
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -261,13 +310,24 @@ const CreditForm = () => {
                     <SelectItem value="Female">Female</SelectItem>
                   </SelectContent>
                 </Select>
-                {errors.Gender && <p className="text-xs text-destructive">This field is required</p>}
+                {errors.Gender && (
+                  <p className="text-xs text-destructive">
+                    This field is required
+                  </p>
+                )}
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="Married">Marital Status</Label>
-                <Select value={form.Married} onValueChange={(value) => handleChange("Married", value)}>
-                  <SelectTrigger className={cn(errors.Married && "border-destructive border-2")}>
+                <Select
+                  value={form.Married}
+                  onValueChange={(value) => handleChange("Married", value)}
+                >
+                  <SelectTrigger
+                    className={cn(
+                      errors.Married && "border-destructive border-2"
+                    )}
+                  >
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -275,13 +335,24 @@ const CreditForm = () => {
                     <SelectItem value="No">Single</SelectItem>
                   </SelectContent>
                 </Select>
-                {errors.Married && <p className="text-xs text-destructive">This field is required</p>}
+                {errors.Married && (
+                  <p className="text-xs text-destructive">
+                    This field is required
+                  </p>
+                )}
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="Dependents">Number of Dependents</Label>
-                <Select value={form.Dependents} onValueChange={(value) => handleChange("Dependents", value)}>
-                  <SelectTrigger className={cn(errors.Dependents && "border-destructive border-2")}>
+                <Select
+                  value={form.Dependents}
+                  onValueChange={(value) => handleChange("Dependents", value)}
+                >
+                  <SelectTrigger
+                    className={cn(
+                      errors.Dependents && "border-destructive border-2"
+                    )}
+                  >
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -291,13 +362,24 @@ const CreditForm = () => {
                     <SelectItem value="3">3+</SelectItem>
                   </SelectContent>
                 </Select>
-                {errors.Dependents && <p className="text-xs text-destructive">This field is required</p>}
+                {errors.Dependents && (
+                  <p className="text-xs text-destructive">
+                    This field is required
+                  </p>
+                )}
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="Education">Education Level</Label>
-                <Select value={form.Education} onValueChange={(value) => handleChange("Education", value)}>
-                  <SelectTrigger className={cn(errors.Education && "border-destructive border-2")}>
+                <Select
+                  value={form.Education}
+                  onValueChange={(value) => handleChange("Education", value)}
+                >
+                  <SelectTrigger
+                    className={cn(
+                      errors.Education && "border-destructive border-2"
+                    )}
+                  >
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -305,13 +387,26 @@ const CreditForm = () => {
                     <SelectItem value="Not Graduate">Not Graduate</SelectItem>
                   </SelectContent>
                 </Select>
-                {errors.Education && <p className="text-xs text-destructive">This field is required</p>}
+                {errors.Education && (
+                  <p className="text-xs text-destructive">
+                    This field is required
+                  </p>
+                )}
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="Self_Employed">Employment Status</Label>
-                <Select value={form.Self_Employed} onValueChange={(value) => handleChange("Self_Employed", value)}>
-                  <SelectTrigger className={cn(errors.Self_Employed && "border-destructive border-2")}>
+                <Select
+                  value={form.Self_Employed}
+                  onValueChange={(value) =>
+                    handleChange("Self_Employed", value)
+                  }
+                >
+                  <SelectTrigger
+                    className={cn(
+                      errors.Self_Employed && "border-destructive border-2"
+                    )}
+                  >
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -319,7 +414,11 @@ const CreditForm = () => {
                     <SelectItem value="No">Employed</SelectItem>
                   </SelectContent>
                 </Select>
-                {errors.Self_Employed && <p className="text-xs text-destructive">This field is required</p>}
+                {errors.Self_Employed && (
+                  <p className="text-xs text-destructive">
+                    This field is required
+                  </p>
+                )}
               </div>
             </div>
           </div>
@@ -335,48 +434,79 @@ const CreditForm = () => {
                 type="number"
                 placeholder="e.g., 5000"
                 value={form.ApplicantIncome}
-                onChange={(e) => handleChange("ApplicantIncome", e.target.value)}
-                className={cn(errors.ApplicantIncome && "border-destructive border-2")}
+                onChange={(e) =>
+                  handleChange("ApplicantIncome", e.target.value)
+                }
+                className={cn(
+                  errors.ApplicantIncome && "border-destructive border-2"
+                )}
               />
               {errors.ApplicantIncome ? (
-                <p className="text-xs text-destructive">This field is required</p>
+                <p className="text-xs text-destructive">
+                  This field is required
+                </p>
               ) : (
-                <p className="text-xs text-muted-foreground">Enter your total monthly income before taxes</p>
+                <p className="text-xs text-muted-foreground">
+                  Enter your total monthly income before taxes
+                </p>
               )}
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="CoapplicantIncome">Co-applicant Monthly Income (USD)</Label>
+              <Label htmlFor="CoapplicantIncome">
+                Co-applicant Monthly Income (USD)
+              </Label>
               <Input
                 id="CoapplicantIncome"
                 type="number"
                 placeholder="e.g., 3000 (or 0 if none)"
                 value={form.CoapplicantIncome}
-                onChange={(e) => handleChange("CoapplicantIncome", e.target.value)}
-                className={cn(errors.CoapplicantIncome && "border-destructive border-2")}
+                onChange={(e) =>
+                  handleChange("CoapplicantIncome", e.target.value)
+                }
+                className={cn(
+                  errors.CoapplicantIncome && "border-destructive border-2"
+                )}
               />
               {errors.CoapplicantIncome ? (
-                <p className="text-xs text-destructive">This field is required</p>
+                <p className="text-xs text-destructive">
+                  This field is required
+                </p>
               ) : (
-                <p className="text-xs text-muted-foreground">Enter 0 if there is no co-applicant</p>
+                <p className="text-xs text-muted-foreground">
+                  Enter 0 if there is no co-applicant
+                </p>
               )}
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="Credit_History">Credit History</Label>
-              <Select value={form.Credit_History} onValueChange={(value) => handleChange("Credit_History", value)}>
-                <SelectTrigger className={cn(errors.Credit_History && "border-destructive border-2")}>
+              <Select
+                value={form.Credit_History}
+                onValueChange={(value) => handleChange("Credit_History", value)}
+              >
+                <SelectTrigger
+                  className={cn(
+                    errors.Credit_History && "border-destructive border-2"
+                  )}
+                >
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="1">Good - Meets guidelines</SelectItem>
-                  <SelectItem value="0">Poor - Does not meet guidelines</SelectItem>
+                  <SelectItem value="0">
+                    Poor - Does not meet guidelines
+                  </SelectItem>
                 </SelectContent>
               </Select>
               {errors.Credit_History ? (
-                <p className="text-xs text-destructive">This field is required</p>
+                <p className="text-xs text-destructive">
+                  This field is required
+                </p>
               ) : (
-                <p className="text-xs text-muted-foreground">Select based on previous credit performance</p>
+                <p className="text-xs text-muted-foreground">
+                  Select based on previous credit performance
+                </p>
               )}
             </div>
           </div>
@@ -393,19 +523,34 @@ const CreditForm = () => {
                 placeholder="e.g., 150 (for $150,000)"
                 value={form.LoanAmount}
                 onChange={(e) => handleChange("LoanAmount", e.target.value)}
-                className={cn(errors.LoanAmount && "border-destructive border-2")}
+                className={cn(
+                  errors.LoanAmount && "border-destructive border-2"
+                )}
               />
               {errors.LoanAmount ? (
-                <p className="text-xs text-destructive">This field is required</p>
+                <p className="text-xs text-destructive">
+                  This field is required
+                </p>
               ) : (
-                <p className="text-xs text-muted-foreground">Enter the amount in thousands (e.g., 150 for $150,000)</p>
+                <p className="text-xs text-muted-foreground">
+                  Enter the amount in thousands (e.g., 150 for $150,000)
+                </p>
               )}
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="Loan_Amount_Term">Loan Term (months)</Label>
-              <Select value={form.Loan_Amount_Term} onValueChange={(value) => handleChange("Loan_Amount_Term", value)}>
-                <SelectTrigger className={cn(errors.Loan_Amount_Term && "border-destructive border-2")}>
+              <Select
+                value={form.Loan_Amount_Term}
+                onValueChange={(value) =>
+                  handleChange("Loan_Amount_Term", value)
+                }
+              >
+                <SelectTrigger
+                  className={cn(
+                    errors.Loan_Amount_Term && "border-destructive border-2"
+                  )}
+                >
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -415,13 +560,24 @@ const CreditForm = () => {
                   <SelectItem value="120">120 months (10 years)</SelectItem>
                 </SelectContent>
               </Select>
-              {errors.Loan_Amount_Term && <p className="text-xs text-destructive">This field is required</p>}
+              {errors.Loan_Amount_Term && (
+                <p className="text-xs text-destructive">
+                  This field is required
+                </p>
+              )}
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="Property_Area">Property Location</Label>
-              <Select value={form.Property_Area} onValueChange={(value) => handleChange("Property_Area", value)}>
-                <SelectTrigger className={cn(errors.Property_Area && "border-destructive border-2")}>
+              <Select
+                value={form.Property_Area}
+                onValueChange={(value) => handleChange("Property_Area", value)}
+              >
+                <SelectTrigger
+                  className={cn(
+                    errors.Property_Area && "border-destructive border-2"
+                  )}
+                >
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -430,7 +586,11 @@ const CreditForm = () => {
                   <SelectItem value="Rural">Rural</SelectItem>
                 </SelectContent>
               </Select>
-              {errors.Property_Area && <p className="text-xs text-destructive">This field is required</p>}
+              {errors.Property_Area && (
+                <p className="text-xs text-destructive">
+                  This field is required
+                </p>
+              )}
             </div>
           </div>
         )}
@@ -446,14 +606,18 @@ const CreditForm = () => {
             <ChevronLeft className="w-4 h-4" />
             Previous
           </Button>
-          
+
           {step < totalSteps ? (
             <Button onClick={handleNext} className="flex items-center gap-2">
               Next
               <ChevronRight className="w-4 h-4" />
             </Button>
           ) : (
-            <Button onClick={handleSubmit} disabled={isLoading} className="flex items-center gap-2">
+            <Button
+              onClick={handleSubmit}
+              disabled={isLoading}
+              className="flex items-center gap-2"
+            >
               {isLoading ? "Calculating..." : "Calculate Risk"}
               {!isLoading && <ChevronRight className="w-4 h-4" />}
             </Button>

@@ -123,7 +123,7 @@ from fastapi.middleware.cors import CORSMiddleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://credit-frontend-558345680759.us-west2.run.app",  # ✅ your deployed frontend
+        "https://credit-frontend-558345680759.us-west2.run.app",  # deployed frontend
         "http://localhost:5173",  # for local dev
         "http://127.0.0.1:5173"
     ],

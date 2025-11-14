@@ -5,24 +5,25 @@ from typing import Literal
 import uuid
 from datetime import datetime
 import os
+from dotenv import load_dotenv
 
 from google.cloud import aiplatform
+
+# Load environment variables from .env file
+load_dotenv()
 
 # ------------------------------------------------------
 # FastAPI setup
 # ------------------------------------------------------
 app = FastAPI(title="Credit Risk Predictor API")
 
-# Get allowed origins from environment or use defaults
-allowed_origins = os.getenv(
-    "ALLOWED_ORIGINS",
-    "http://localhost:5173, http://127.0.0.1:5173,http://localhost:8080,http://127.0.0.1:8080"
-).split(",")
-
-# Add deployed frontend if not already in the list
-deployed_frontend = "https://credit-frontend-558345680759.us-west2.run.app"
-if deployed_frontend not in allowed_origins:
-    allowed_origins.append(deployed_frontend)
+# Get allowed origins from environment variable
+allowed_origins_str = os.getenv(
+    "FRONTEND_URL",
+    "http://localhost:5173,http://127.0.0.1:5173,http://localhost:8080,http://127.0.0.1:8080"
+)
+# Split by comma and strip whitespace
+allowed_origins = [origin.strip() for origin in allowed_origins_str.split(",") if origin.strip()]
 
 app.add_middleware(
     CORSMiddleware,
@@ -101,8 +102,6 @@ def predict(payload: CreditInput):
     if not preds:
         raise HTTPException(status_code=500, detail="Empty prediction response from Vertex AI.")
 
-    # Example structure:
-    # [{'scores': [0.864, 0.136], 'classes': ['Y', 'N']}]
     raw_pred = preds[0]
     print("🧠 Vertex raw response:", preds)
 

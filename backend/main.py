@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import Literal
@@ -17,19 +17,24 @@ load_dotenv()
 # ------------------------------------------------------
 app = FastAPI(title="Credit Risk Predictor API")
 
-# CORS Configuration - Explicitly include deployed frontend URL
-# Get allowed origins from environment variable (for local dev flexibility)
-allowed_origins_str = os.getenv(
-    "FRONTEND_URL",
-    "http://localhost:5173,http://127.0.0.1:5173,http://localhost:8080,http://127.0.0.1:8080"
-)
-# Split by comma and strip whitespace
-allowed_origins = [origin.strip() for origin in allowed_origins_str.split(",") if origin.strip()]
+# CORS Configuration - Simplified and explicit
+allowed_origins = [
+    "http://localhost:8080",
+    "http://127.0.0.1:8080",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "https://credit-frontend-558345680759.us-west2.run.app",
+]
 
-# Always explicitly include deployed frontend URL (works even without .env file)
-deployed_frontend_url = "https://credit-frontend-558345680759.us-west2.run.app"
-if deployed_frontend_url not in allowed_origins:
-    allowed_origins.append(deployed_frontend_url)
+# Also check environment variable
+env_origins = os.getenv("FRONTEND_URL", "")
+if env_origins:
+    for origin in env_origins.split(","):
+        origin = origin.strip()
+        if origin and origin not in allowed_origins:
+            allowed_origins.append(origin)
+
+print(f"Allowed CORS origins: {allowed_origins}")
 
 app.add_middleware(
     CORSMiddleware,
@@ -38,6 +43,20 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# # Add middleware to log requests (for debugging)
+# @app.middleware("http")
+# async def log_requests(request: Request, call_next):
+#     # Log the request
+#     print(f"{request.method} {request.url.path}")
+#     print(f"Origin: {request.headers.get('origin', 'None')}")
+#     print(f"Headers: {dict(request.headers)}")
+    
+#     response = await call_next(request)
+    
+#     # Log the response
+#     print(f"Response: {response.status_code}")
+#     return response
 
 # ------------------------------------------------------
 # Input schema
@@ -96,6 +115,24 @@ def preprocess_to_vertex_payload(data: CreditInput) -> dict:
 # ------------------------------------------------------
 # Predict endpoint
 # ------------------------------------------------------
+
+# Explicit OPTIONS handler for CORS preflight
+@app.options("/predict")
+async def options_predict(request: Request):
+    """Handle CORS preflight requests"""
+    origin = request.headers.get("origin", "")
+    
+    # Return 200 OK with CORS headers
+    # The CORS middleware will add the appropriate headers
+    return Response(
+        status_code=200,
+        headers={
+            "Access-Control-Allow-Methods": "POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type",
+            "Access-Control-Max-Age": "3600",
+        }
+    )
+
 @app.post("/predict")
 def predict(payload: CreditInput):
     vertex_payload = preprocess_to_vertex_payload(payload)

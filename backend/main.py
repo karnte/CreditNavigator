@@ -13,9 +13,20 @@ from google.cloud import aiplatform
 # ------------------------------------------------------
 app = FastAPI(title="Credit Risk Predictor API")
 
+# Get allowed origins from environment or use defaults
+allowed_origins = os.getenv(
+    "ALLOWED_ORIGINS",
+    "http://localhost:5173, http://127.0.0.1:5173,http://localhost:8080,http://127.0.0.1:8080"
+).split(",")
+
+# Add deployed frontend if not already in the list
+deployed_frontend = "https://credit-frontend-558345680759.us-west2.run.app"
+if deployed_frontend not in allowed_origins:
+    allowed_origins.append(deployed_frontend)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:8080", "http://127.0.0.1:8080"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -117,17 +128,3 @@ def predict(payload: CreditInput):
         raise HTTPException(status_code=500, detail=f"Unexpected class label: {pred_class}")
 
     return {"prediction": pred_value}
-
-from fastapi.middleware.cors import CORSMiddleware
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "https://credit-frontend-558345680759.us-west2.run.app",  # deployed frontend
-        "http://localhost:5173",  # for local dev
-        "http://127.0.0.1:5173"
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)

@@ -21,6 +21,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { API_BASE_URL } from "@/lib/config";
 
 type FormData = {
   Gender: string;
@@ -143,8 +144,7 @@ const CreditForm = () => {
     };
 
     try {
-      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
-      const response = await fetch(`${apiBaseUrl}/predict`, {
+      const response = await fetch(`${API_BASE_URL}/predict`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(backendPayload),

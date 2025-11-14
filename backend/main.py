@@ -19,7 +19,7 @@ app = FastAPI(title="Credit Risk Predictor API")
 
 # Get allowed origins from environment variable
 allowed_origins_str = os.getenv(
-    "FRONTEND_URL",
+    "https://credit-frontend-558345680759.us-west2.run.app",
     "http://localhost:5173,http://127.0.0.1:5173,http://localhost:8080,http://127.0.0.1:8080"
 )
 # Split by comma and strip whitespace
@@ -90,6 +90,9 @@ def preprocess_to_vertex_payload(data: CreditInput) -> dict:
 # ------------------------------------------------------
 # Predict endpoint
 # ------------------------------------------------------
+@app.options("/predict")
+def preflight_handler():
+    return {"message": "ok"}
 @app.post("/predict")
 def predict(payload: CreditInput):
     vertex_payload = preprocess_to_vertex_payload(payload)

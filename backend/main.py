@@ -17,13 +17,19 @@ load_dotenv()
 # ------------------------------------------------------
 app = FastAPI(title="Credit Risk Predictor API")
 
-# Get allowed origins from environment variable
+# CORS Configuration - Explicitly include deployed frontend URL
+# Get allowed origins from environment variable (for local dev flexibility)
 allowed_origins_str = os.getenv(
-    "https://credit-frontend-558345680759.us-west2.run.app",
+    "FRONTEND_URL",
     "http://localhost:5173,http://127.0.0.1:5173,http://localhost:8080,http://127.0.0.1:8080"
 )
 # Split by comma and strip whitespace
 allowed_origins = [origin.strip() for origin in allowed_origins_str.split(",") if origin.strip()]
+
+# Always explicitly include deployed frontend URL (works even without .env file)
+deployed_frontend_url = "https://credit-frontend-558345680759.us-west2.run.app"
+if deployed_frontend_url not in allowed_origins:
+    allowed_origins.append(deployed_frontend_url)
 
 app.add_middleware(
     CORSMiddleware,
@@ -90,9 +96,6 @@ def preprocess_to_vertex_payload(data: CreditInput) -> dict:
 # ------------------------------------------------------
 # Predict endpoint
 # ------------------------------------------------------
-@app.options("/predict")
-def preflight_handler():
-    return {"message": "ok"}
 @app.post("/predict")
 def predict(payload: CreditInput):
     vertex_payload = preprocess_to_vertex_payload(payload)

@@ -143,8 +143,7 @@ const CreditForm = () => {
     };
 
     try {
-      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
-      import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
+      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
       const response = await fetch(`${apiBaseUrl}/predict`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

@@ -2,12 +2,11 @@ from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import Literal
-import uuid
-from datetime import datetime
 import os
-from dotenv import load_dotenv
+import pickle
 
-from google.cloud import aiplatform
+import pandas as pd
+from dotenv import load_dotenv
 
 # Load environment variables from .env file
 load_dotenv()
@@ -44,73 +43,69 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# # Add middleware to log requests (for debugging)
-# @app.middleware("http")
-# async def log_requests(request: Request, call_next):
-#     # Log the request
-#     print(f"{request.method} {request.url.path}")
-#     print(f"Origin: {request.headers.get('origin', 'None')}")
-#     print(f"Headers: {dict(request.headers)}")
-    
-#     response = await call_next(request)
-    
-#     # Log the response
-#     print(f"Response: {response.status_code}")
-#     return response
-
 # ------------------------------------------------------
 # Input schema
 # ------------------------------------------------------
 class CreditInput(BaseModel):
-    Gender: Literal["Male", "Female"]
-    Married: Literal["Y", "N"]
-    Dependents: int = Field(ge=0)
-    Education: Literal["Graduate", "Undergraduate"]
-    Self_Employed: Literal["Y", "N"]
-    ApplicantIncome: float = Field(ge=0)
-    CoapplicantIncome: float = Field(ge=0)
-    LoanAmount: float = Field(ge=0)
-    Loan_Amount_Term: float = Field(ge=0)
-    Credit_History: Literal["1", "0"]
-    Property_Area: Literal["Urban", "Semi Urban", "Rural"]
-
-# ------------------------------------------------------
-# Vertex AI config
-# ------------------------------------------------------
-PROJECT_ID = os.getenv("VERTEX_PROJECT_ID", "cloud-ml-project-477817")
-LOCATION = os.getenv("VERTEX_LOCATION", "us-central1")
-ENDPOINT_ID = os.getenv("VERTEX_ENDPOINT_ID", "7091875287922638848")
-
-# ------------------------------------------------------
-# Vertex AI helpers
-# ------------------------------------------------------
-def call_vertex_ai(instances: list[dict]) -> list:
-    aiplatform.init(project=PROJECT_ID, location=LOCATION)
-    endpoint = aiplatform.Endpoint(
-        endpoint_name=f"projects/{PROJECT_ID}/locations/{LOCATION}/endpoints/{ENDPOINT_ID}"
-    )
-    prediction = endpoint.predict(instances=instances)
-    return prediction.predictions
+    Sex: Literal["Male", "Female"]
+    Occupation: str
+    Salary: float = Field(ge=0)
+    Marriage_Status: Literal["Single", "Married", "Divorced", "Widowed"]
+    credit_score: float = Field(ge=0)
+    credit_grade: str
+    outstanding: float = Field(ge=0)
+    Coapplicant: Literal["Yes", "No"]
+    loan_amount: float = Field(ge=0)
+    loan_term: float = Field(gt=0)
+    Interest_rate: float = Field(ge=0)
 
 
-def preprocess_to_vertex_payload(data: CreditInput) -> dict:
-    """Prepare payload for Vertex AI — auto Loan_ID and proper types."""
-    loan_id = f"AUTO-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:8]}"
+# ------------------------------------------------------
+# Local model config
+# ------------------------------------------------------
+MODEL_PATH = os.getenv("MODEL_PATH", os.path.join(os.path.dirname(__file__), "model.pkl"))
+MODEL = None
+
+
+def load_model() -> None:
+    global MODEL
+    if MODEL is None:
+        try:
+            with open(MODEL_PATH, "rb") as model_file:
+                MODEL = pickle.load(model_file)
+        except FileNotFoundError as exc:
+            raise RuntimeError(
+                f"Model file not found at '{MODEL_PATH}'. Place model.pkl in backend/ or set MODEL_PATH."
+            ) from exc
+        except Exception as exc:
+            raise RuntimeError(f"Failed to load model from '{MODEL_PATH}': {exc}") from exc
+
+
+@app.on_event("startup")
+def startup_event() -> None:
+    load_model()
+
+
+# ------------------------------------------------------
+# Prediction helpers
+# ------------------------------------------------------
+def preprocess_to_model_input(data: CreditInput) -> pd.DataFrame:
+    """Prepare payload for the local model with the expected feature order."""
     payload = {
-        "Loan_ID": loan_id,
-        "Gender": str(data.Gender),
-        "Married": str(data.Married),
-        "Dependents": str(data.Dependents),
-        "Education": str(data.Education),
-        "Self_Employed": str(data.Self_Employed),
-        "ApplicantIncome": str(data.ApplicantIncome),
-        "CoapplicantIncome": str(data.CoapplicantIncome),
-        "LoanAmount": str(data.LoanAmount),
-        "Loan_Amount_Term": str(data.Loan_Amount_Term),
-        "Credit_History": str(data.Credit_History),
-        "Property_Area": str(data.Property_Area),
+        "Sex": data.Sex,
+        "Occupation": data.Occupation,
+        "Salary": data.Salary,
+        "Marriage_Status": data.Marriage_Status,
+        "credit_score": data.credit_score,
+        "credit_grade": data.credit_grade,
+        "outstanding": data.outstanding,
+        "Coapplicant": data.Coapplicant,
+        "loan_amount": data.loan_amount,
+        "loan_term": data.loan_term,
+        "Interest_rate": data.Interest_rate,
     }
-    return payload
+    return pd.DataFrame([payload])
+
 
 # ------------------------------------------------------
 # Predict endpoint
@@ -120,8 +115,7 @@ def preprocess_to_vertex_payload(data: CreditInput) -> dict:
 @app.options("/predict")
 async def options_predict(request: Request):
     """Handle CORS preflight requests"""
-    origin = request.headers.get("origin", "")
-    
+
     # Return 200 OK with CORS headers
     # The CORS middleware will add the appropriate headers
     return Response(
@@ -130,43 +124,27 @@ async def options_predict(request: Request):
             "Access-Control-Allow-Methods": "POST, OPTIONS",
             "Access-Control-Allow-Headers": "Content-Type",
             "Access-Control-Max-Age": "3600",
-        }
+        },
     )
+
 
 @app.post("/predict")
 def predict(payload: CreditInput):
-    vertex_payload = preprocess_to_vertex_payload(payload)
-
     try:
-        preds = call_vertex_ai([vertex_payload])
+        load_model()
+        model_input = preprocess_to_model_input(payload)
+
+        raw_pred = MODEL.predict(model_input)[0]
+
+        if hasattr(MODEL, "predict_proba"):
+            probabilities = MODEL.predict_proba(model_input)[0].tolist()
+        else:
+            probabilities = None
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Vertex AI call failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Model prediction failed: {str(e)}")
 
-    if not preds:
-        raise HTTPException(status_code=500, detail="Empty prediction response from Vertex AI.")
-
-    raw_pred = preds[0]
-    print("🧠 Vertex raw response:", preds)
-
-    if not isinstance(raw_pred, dict):
-        raise HTTPException(status_code=500, detail=f"Unexpected prediction format: {type(raw_pred)}")
-
-    scores = raw_pred.get("scores")
-    classes = raw_pred.get("classes")
-
-    if not scores or not classes or len(scores) != len(classes):
-        raise HTTPException(status_code=500, detail=f"Invalid Vertex AI response structure: {raw_pred}")
-
-    # Pick class with highest probability
-    max_idx = scores.index(max(scores))
-    pred_class = classes[max_idx]
-
-    # Map Y/N to binary for frontend (1=Low Risk, 0=High Risk)
-    if pred_class.upper() == "Y":
-        pred_value = 1
-    elif pred_class.upper() == "N":
-        pred_value = 0
-    else:
-        raise HTTPException(status_code=500, detail=f"Unexpected class label: {pred_class}")
-
-    return {"prediction": pred_value}
+    return {
+        "prediction": int(raw_pred) if str(raw_pred).isdigit() else str(raw_pred),
+        "probabilities": probabilities,
+    }

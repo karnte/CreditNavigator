@@ -1,172 +1,149 @@
 from fastapi import FastAPI, HTTPException, Request, Response
-from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
 from pydantic import BaseModel, Field
 from typing import Literal
-import uuid
-from datetime import datetime
+from pathlib import Path
 import os
+import pandas as pd
+import joblib
 from dotenv import load_dotenv
 
-from google.cloud import aiplatform
-
-# Load environment variables from .env file
 load_dotenv()
 
-# ------------------------------------------------------
-# FastAPI setup
-# ------------------------------------------------------
-app = FastAPI(title="Credit Risk Predictor API")
 
-# CORS Configuration - Simplified and explicit
-allowed_origins = [
-    "http://localhost:8080",
-    "http://127.0.0.1:8080",
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "https://credit-frontend-558345680759.us-west2.run.app",
-]
+MODEL = None
+MODEL_PATH = os.getenv("MODEL_PATH")
+model_path = (Path(__file__).parent / MODEL_PATH).resolve()
+if not MODEL_PATH:
+    raise RuntimeError("MODEL_PATH environment variable is not set")
 
-# Also check environment variable
-env_origins = os.getenv("FRONTEND_URL", "")
-if env_origins:
-    for origin in env_origins.split(","):
-        origin = origin.strip()
-        if origin and origin not in allowed_origins:
-            allowed_origins.append(origin)
+def load_model():
+    global MODEL
 
-print(f"Allowed CORS origins: {allowed_origins}")
+    if MODEL is not None:
+        return
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=allowed_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+    model_path = Path(MODEL_PATH).resolve()
+    print("Loading model from:", model_path)
 
-# # Add middleware to log requests (for debugging)
-# @app.middleware("http")
-# async def log_requests(request: Request, call_next):
-#     # Log the request
-#     print(f"{request.method} {request.url.path}")
-#     print(f"Origin: {request.headers.get('origin', 'None')}")
-#     print(f"Headers: {dict(request.headers)}")
-    
-#     response = await call_next(request)
-    
-#     # Log the response
-#     print(f"Response: {response.status_code}")
-#     return response
+    if not model_path.exists():
+        raise RuntimeError(f"Model not found: {model_path}")
 
-# ------------------------------------------------------
-# Input schema
-# ------------------------------------------------------
+    MODEL = joblib.load(model_path)
+
+    print("Model loaded successfully")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    load_model()
+    yield
+
+app = FastAPI(title="Credit Risk Predictor API", lifespan=lifespan)
+
+# # --- CORS ---
+# allowed_origins = [
+#     "http://localhost:8080",
+#     "http://127.0.0.1:8080",
+#     "http://localhost:5173",
+#     "http://127.0.0.1:5173",
+#     "https://credit-frontend-558345680759.us-west2.run.app",
+# ]
+# env_origins = os.getenv("FRONTEND_URL", "")
+# if env_origins:
+#     for origin in env_origins.split(","):
+#         origin = origin.strip()
+#         if origin and origin not in allowed_origins:
+#             allowed_origins.append(origin)
+
+# app.add_middleware(
+#     CORSMiddleware,
+#     allow_origins=allowed_origins,
+#     allow_credentials=True,
+#     allow_methods=["*"],
+#     allow_headers=["*"],
+# )
+
+# --- Schema ---
 class CreditInput(BaseModel):
-    Gender: Literal["Male", "Female"]
-    Married: Literal["Y", "N"]
-    Dependents: int = Field(ge=0)
-    Education: Literal["Graduate", "Undergraduate"]
-    Self_Employed: Literal["Y", "N"]
-    ApplicantIncome: float = Field(ge=0)
-    CoapplicantIncome: float = Field(ge=0)
-    LoanAmount: float = Field(ge=0)
-    Loan_Amount_Term: float = Field(ge=0)
-    Credit_History: Literal["1", "0"]
-    Property_Area: Literal["Urban", "Semi Urban", "Rural"]
+    Sex: Literal["Male", "Female"]
+    Occupation: str
+    Salary: float = Field(ge=0)
+    Marriage_Status: Literal["Single", "Married", "Divorced", "Widowed"]
+    credit_score: float = Field(ge=0)
+    credit_grade: str
+    outstanding: float = Field(ge=0)
+    overdue: float = Field(ge=0)
+    Coapplicant: int = Field(ge=0, le=1)
+    loan_amount: float = Field(ge=0)
+    loan_term: float = Field(gt=0)
+    Interest_rate: float = Field(ge=0)
 
-# ------------------------------------------------------
-# Vertex AI config
-# ------------------------------------------------------
-PROJECT_ID = os.getenv("VERTEX_PROJECT_ID", "cloud-ml-project-477817")
-LOCATION = os.getenv("VERTEX_LOCATION", "us-central1")
-ENDPOINT_ID = os.getenv("VERTEX_ENDPOINT_ID", "7091875287922638848")
+def preprocess_to_model_input(data: CreditInput) -> pd.DataFrame:
+    salary = float(data.Salary)
+    denom = salary if salary > 0 else 1e-9
 
-# ------------------------------------------------------
-# Vertex AI helpers
-# ------------------------------------------------------
-def call_vertex_ai(instances: list[dict]) -> list:
-    aiplatform.init(project=PROJECT_ID, location=LOCATION)
-    endpoint = aiplatform.Endpoint(
-        endpoint_name=f"projects/{PROJECT_ID}/locations/{LOCATION}/endpoints/{ENDPOINT_ID}"
-    )
-    prediction = endpoint.predict(instances=instances)
-    return prediction.predictions
-
-
-def preprocess_to_vertex_payload(data: CreditInput) -> dict:
-    """Prepare payload for Vertex AI — auto Loan_ID and proper types."""
-    loan_id = f"AUTO-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:8]}"
     payload = {
-        "Loan_ID": loan_id,
-        "Gender": str(data.Gender),
-        "Married": str(data.Married),
-        "Dependents": str(data.Dependents),
-        "Education": str(data.Education),
-        "Self_Employed": str(data.Self_Employed),
-        "ApplicantIncome": str(data.ApplicantIncome),
-        "CoapplicantIncome": str(data.CoapplicantIncome),
-        "LoanAmount": str(data.LoanAmount),
-        "Loan_Amount_Term": str(data.Loan_Amount_Term),
-        "Credit_History": str(data.Credit_History),
-        "Property_Area": str(data.Property_Area),
+        "Sex": data.Sex,
+        "Occupation": data.Occupation,
+        "Salary": salary,
+        "Marriage_Status": data.Marriage_Status,
+        "credit_score": float(data.credit_score),
+        "credit_grade": data.credit_grade,
+        "outstanding": float(data.outstanding),
+        "overdue": float(data.overdue),
+        "Coapplicant": data.Coapplicant,
+        "loan_amount": float(data.loan_amount),
+        "loan_term": float(data.loan_term),
+        "Interest_rate": float(data.Interest_rate),
+
+        # engineered
+        "has_overdue": 1 if data.overdue > 0 else 0,
+        "dti": float(data.outstanding) / denom,
+        "lti": float(data.loan_amount) / denom,
     }
-    return payload
 
-# ------------------------------------------------------
-# Predict endpoint
-# ------------------------------------------------------
+    df = pd.DataFrame([payload])
 
-# Explicit OPTIONS handler for CORS preflight
-@app.options("/predict")
-async def options_predict(request: Request):
-    """Handle CORS preflight requests"""
-    origin = request.headers.get("origin", "")
-    
-    # Return 200 OK with CORS headers
-    # The CORS middleware will add the appropriate headers
-    return Response(
-        status_code=200,
-        headers={
-            "Access-Control-Allow-Methods": "POST, OPTIONS",
-            "Access-Control-Allow-Headers": "Content-Type",
-            "Access-Control-Max-Age": "3600",
-        }
-    )
+    # enforce the exact columns + order the pipeline was trained with
+    if hasattr(MODEL, "feature_names_in_"):
+        required = list(MODEL.feature_names_in_)
+        missing = set(required) - set(df.columns)
+        if missing:
+            raise ValueError(f"Missing required features: {missing}")
+        df = df[required]
+
+    return df
+
+@app.get("/")
+def read_root():
+    return {"message": "Welcome to the Credit Risk Predictor API. Use /docs."}
+
+# @app.options("/predict")
+# async def options_predict(request: Request):
+#     return Response(
+#         status_code=200,
+#         headers={
+#             "Access-Control-Allow-Methods": "POST, OPTIONS",
+#             "Access-Control-Allow-Headers": "Content-Type",
+#             "Access-Control-Max-Age": "3600",
+#         },
+#     )
 
 @app.post("/predict")
 def predict(payload: CreditInput):
-    vertex_payload = preprocess_to_vertex_payload(payload)
-
     try:
-        preds = call_vertex_ai([vertex_payload])
+        model_input = preprocess_to_model_input(payload)
+        classes = MODEL.classes_
+
+        raw_pred = MODEL.predict(model_input)[0]
+        proba = MODEL.predict_proba(model_input)[0].tolist() if hasattr(MODEL, "predict_proba") else None
+        prob_dict = {str(classes[i]): float(proba[i]) for i in range(len(classes))}
+
+        return {
+            "prediction": int(raw_pred),
+            "probabilities": prob_dict
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Vertex AI call failed: {str(e)}")
-
-    if not preds:
-        raise HTTPException(status_code=500, detail="Empty prediction response from Vertex AI.")
-
-    raw_pred = preds[0]
-    print("🧠 Vertex raw response:", preds)
-
-    if not isinstance(raw_pred, dict):
-        raise HTTPException(status_code=500, detail=f"Unexpected prediction format: {type(raw_pred)}")
-
-    scores = raw_pred.get("scores")
-    classes = raw_pred.get("classes")
-
-    if not scores or not classes or len(scores) != len(classes):
-        raise HTTPException(status_code=500, detail=f"Invalid Vertex AI response structure: {raw_pred}")
-
-    # Pick class with highest probability
-    max_idx = scores.index(max(scores))
-    pred_class = classes[max_idx]
-
-    # Map Y/N to binary for frontend (1=Low Risk, 0=High Risk)
-    if pred_class.upper() == "Y":
-        pred_value = 1
-    elif pred_class.upper() == "N":
-        pred_value = 0
-    else:
-        raise HTTPException(status_code=500, detail=f"Unexpected class label: {pred_class}")
-
-    return {"prediction": pred_value}
+        raise HTTPException(status_code=500, detail=f"Model prediction failed: {e}")
